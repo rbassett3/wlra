@@ -36,8 +36,8 @@ def lra(x, rank):
     vt = vt[:rank]
   return np.einsum('ij,j,jk->ik', u, d, vt)
 
-def wlra(x, w, rank, max_iters=10000, atol=1e-3,
-    verbose=False):
+def wlra(x, w, rank, init_rank=None, init_mat=None, max_iters=10000, atol=1e-3,
+    verbose=False, seed=None):
   """Return the weighted low rank approximation of x
 
   Minimize the weighted Frobenius norm between x and the approximation z using
@@ -48,6 +48,11 @@ def wlra(x, w, rank, max_iters=10000, atol=1e-3,
   :param x: input data (n, p)
   :param w: input weights (n, p)
   :param rank: - rank of the approximation (non-negative)
+  :param init_rank: initialization rank (non-negative)
+  :param init_mat: initialization matrix. If init_rank is not provided and 
+    init_mat is, then init_rank is set to be min(n,p). If init_rank is provided
+    then init_mat is taken to be best init_rank estimate (computed by PCA) of
+    init_mat
   :param max_iters: - maximum number of EM iterations
   :param atol: - minimum absolute difference in objective function for convergence
   :param verbose: - print objective function updates
@@ -63,18 +68,32 @@ def wlra(x, w, rank, max_iters=10000, atol=1e-3,
   #
   # Srebro and Jaakkola suggest the best strategy is to initialize from zero,
   # but go from a full rank down to a rank k approximation in the first
-  # iterations. Compromise and start from a rank 3 * k approximation
+  # iterations. Compromise and start from a rank 3 * k approximation, 
+  # subject to a sanity check on the data's dimensions
   target = rank
-  init_rank = np.minimum(3 * rank, np.min(x.shape))
-  rank = init_rank
-  z = np.zeros(x.shape)
+  if seed is not None:
+    np.random.seed(seed)
+  if init_mat is None:
+    z = np.random.normal(size=x.shape) #the matrix which is iteratively improved
+    #randomly declared b/c init_mat not provided.
+    #choosing "best" randomness is difficult
+    if init_rank is None:
+      init_rank = np.minimum(3 * rank, np.min(x.shape))
+    #if it's not none take it to be user defined value by doing nothing
+  else: #init_mat is given
+    if init_rank is None: #rank not given
+      init_rank = np.minimum(3 * rank, np.min(x.shape))
+      z = init_mat
+    else: #rank given
+      z = lra(init_mat, init_rank)
+  cur_rank = init_rank
   obj = (w * np.square(x)).sum()
   if verbose:
     print(f'wsvd [0] = {obj}')
   for i in range(max_iters):
-    z1 = lra(w * x + (1 - w) * z, rank)
-    if rank > target:
-      rank -= 1
+    z1 = lra(w * x + (1 - w) * z, cur_rank)
+    if cur_rank > target:
+      cur_rank -= 1
     update = (w * np.square(x - z1)).sum()
     if verbose:
       print(f'wsvd [{i + 1}] = {update}')
