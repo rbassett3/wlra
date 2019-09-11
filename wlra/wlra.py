@@ -36,7 +36,8 @@ def lra(x, rank):
     vt = vt[:rank]
   return np.einsum('ij,j,jk->ik', u, d, vt)
 
-def wlra(x, w, rank, max_iters=10000, atol=1e-3, verbose=False):
+def wlra(x, w, rank, max_iters=10000, atol=1e-3,
+    verbose=False):
   """Return the weighted low rank approximation of x
 
   Minimize the weighted Frobenius norm between x and the approximation z using
@@ -64,7 +65,7 @@ def wlra(x, w, rank, max_iters=10000, atol=1e-3, verbose=False):
   # but go from a full rank down to a rank k approximation in the first
   # iterations. Compromise and start from a rank 3 * k approximation
   target = rank
-  init_rank = 3 * rank
+  init_rank = np.minimum(3 * rank, np.min(x.shape))
   rank = init_rank
   z = np.zeros(x.shape)
   obj = (w * np.square(x)).sum()
